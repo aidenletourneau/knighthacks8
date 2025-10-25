@@ -1,47 +1,29 @@
-from typing import Annotated
-from contextlib import asynccontextmanager
-
-from pydantic import BaseModel
-from fastapi import Depends, FastAPI, HTTPException, Query
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from fastapi import APIRouter, Depends, HTTPException
 from schemas import Hero
-from fastapi import APIRouter
+from typing import Annotated
+from sqlmodel import Field, Session, SQLModel, create_engine, select
+from fastapi import Depends, FastAPI, HTTPException, Query
 
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
 
 postgres_url = os.getenv("DB_URL")
-api_key = os.getenv("API_KEY")
-
-
-
 engine = create_engine(postgres_url, echo=True)
-
-
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
 
 
 def get_session():
     with Session(engine) as session:
         yield session
 
-
 SessionDep = Annotated[Session, Depends(get_session)]
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    create_db_and_tables()
-    yield
+router = APIRouter(
+    prefix="/heroes",
+    tags=["heroes"],
+    responses={404: {"description": "Not found"}},
+)
 
-
-app = FastAPI(lifespan=lifespan)
-
-
-
-@app.post("/heroes/")
+@router.post("/")
 def create_hero(hero: Hero, session: SessionDep) -> Hero:
     session.add(hero)
     session.commit()
@@ -49,7 +31,7 @@ def create_hero(hero: Hero, session: SessionDep) -> Hero:
     return hero
 
 
-@app.get("/heroes/")
+@router.get("/")
 def read_heroes(
     session: SessionDep,
     offset: int = 0,
@@ -59,7 +41,7 @@ def read_heroes(
     return heroes
 
 
-@app.get("/heroes/{hero_id}")
+@router.get("/{hero_id}")
 def read_hero(hero_id: int, session: SessionDep) -> Hero:
     hero = session.get(Hero, hero_id)
     if not hero:
@@ -67,7 +49,7 @@ def read_hero(hero_id: int, session: SessionDep) -> Hero:
     return hero
 
 
-@app.delete("/heroes/{hero_id}")
+@router.delete("/{hero_id}")
 def delete_hero(hero_id: int, session: SessionDep):
     hero = session.get(Hero, hero_id)
     if not hero:
