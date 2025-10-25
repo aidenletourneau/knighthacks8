@@ -5,23 +5,37 @@ import { GoogleGenAI } from "@google/genai";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import PixelBlast from '../components/PixelBlast';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+
+type QA = {
+  question: string;
+  answer: string;
+};
 
 export default function Home() {
   const [topicInput, setTopicInput] = useState("");
   const [numInput, setNumInput] = useState("");
-  const [questions, setQuestions] = useState("");
+  const [qaList, setQaList] = useState<QA[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   async function generateQuestions() {
     const topic = topicInput.trim();
     const num = parseInt(numInput);
 
     if (!topic || isNaN(num) || num <= 0) {
-      setQuestions("⚠️ Please enter a valid topic and number of questions.");
+      setErrorMsg("⚠️ Please enter a valid topic and number of questions.");
       return;
     }
 
     setLoading(true);
+    setErrorMsg("");
+    setQaList([]);
 
     try {
       const ai = new GoogleGenAI({
@@ -30,16 +44,31 @@ export default function Home() {
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Generate ${num} trivia questions about ${topic}. Provide the questions in a numbered list format.`,
+        contents: `Generate ${num} trivia questions about ${topic}.
+Provide each question and its answer in the following format:
+1. Question text?
+Answer: The correct answer.`,
       });
 
-      setQuestions(response.text ?? "");
-    } 
-    catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      setQuestions("Error generating questions: " + errorMessage);
-    } 
-    finally {
+      const text = response.text ?? "";
+
+      // 🧩 Split the text into Q&A pairs using regex
+      const qaMatches = text.split(/\n(?=\d+\.)/).map((block) => {
+        const qMatch = block.match(/\d+\.\s*(.*?)(?:\n|$)/);
+        const aMatch = block.match(/Answer:\s*(.*)/i);
+        return qMatch && aMatch
+          ? { question: qMatch[1].trim(), answer: aMatch[1].trim() }
+          : null;
+      });
+
+      const parsedQAs = qaMatches.filter((item): item is QA => item !== null);
+
+      setQaList(parsedQAs);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      setErrorMsg("Error generating questions: " + errorMessage);
+    } finally {
       setLoading(false);
     }
   }
@@ -98,16 +127,29 @@ export default function Home() {
             {loading ? "Generating..." : "Generate Questions"}
           </Button>
         </div>
-
-        {questions && (
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-lg p-6 shadow-lg border border-zinc-800">
-            <h2 className="text-xl font-semibold mb-4 text-white">
-              Trivia Questions:
-            </h2>
-            <div className="text-zinc-300 whitespace-pre-wrap">
-              {questions}
-            </div>
+            
+        {errorMsg && (
+          <div className="text-red-500 text-center whitespace-pre-wrap">
+            {errorMsg}
           </div>
+        )}
+
+        {/* Accordion Output */}
+        {qaList.length > 0 && (
+          <Accordion type="single" collapsible className="w-full">
+            {qaList.map((item, index) => (
+              <AccordionItem key={index} value={`item-${index}`}>
+                <AccordionTrigger>
+                  {index + 1}. {item.question}
+                </AccordionTrigger>
+                <AccordionContent>
+                  <p className="text-zinc-700 dark:text-zinc-300">
+                    <strong>Answer:</strong> {item.answer}
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         )}
       </div>
     </div>
