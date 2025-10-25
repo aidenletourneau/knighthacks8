@@ -11,6 +11,13 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type QA = {
   question: string;
@@ -23,6 +30,7 @@ export default function Home() {
   const [qaList, setQaList] = useState<QA[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [difficulty, setDifficulty] = useState("medium"); // 👈 new state
 
   async function generateQuestions() {
     const topic = topicInput.trim();
@@ -44,7 +52,7 @@ export default function Home() {
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Generate ${num} trivia questions about ${topic}. 
+        contents: `Generate ${num} trivia questions about ${topic} with ${difficulty} difficulty.
 Provide each question and its answer in the following format:
 1. Question text?
 Answer: The correct answer.`,
@@ -52,7 +60,6 @@ Answer: The correct answer.`,
 
       const text = response.text ?? "";
 
-      // 🧩 Split the text into Q&A pairs using regex
       const qaMatches = text.split(/\n(?=\d+\.)/).map((block) => {
         const qMatch = block.match(/\d+\.\s*(.*?)(?:\n|$)/);
         const aMatch = block.match(/Answer:\s*(.*)/i);
@@ -62,7 +69,6 @@ Answer: The correct answer.`,
       });
 
       const parsedQAs = qaMatches.filter((item): item is QA => item !== null);
-
       setQaList(parsedQAs);
     } catch (error) {
       const errorMessage =
@@ -75,7 +81,7 @@ Answer: The correct answer.`,
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 p-8 font-sans">
-      {/* Background PixelBlast */}
+      {/* Background */}
       <div className="fixed inset-0 z-0">
         <PixelBlast
           variant="square"
@@ -97,7 +103,7 @@ Answer: The correct answer.`,
           transparent
         />
       </div>
-      
+
       {/* Content */}
       <div className="relative z-10 max-w-2xl w-full space-y-6">
         <h1 className="text-3xl font-bold text-center text-white">
@@ -118,6 +124,25 @@ Answer: The correct answer.`,
           onChange={(e) => setNumInput(e.target.value)}
         />
 
+        {/* Difficulty Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              {`Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56">
+            <DropdownMenuRadioGroup
+              value={difficulty}
+              onValueChange={setDifficulty} // 👈 updates difficulty
+            >
+              <DropdownMenuRadioItem value="easy">Easy</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="medium">Medium</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="hard">Hard</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <div className="text-center">
           <Button
             onClick={generateQuestions}
@@ -127,14 +152,13 @@ Answer: The correct answer.`,
             {loading ? "Generating..." : "Generate Questions"}
           </Button>
         </div>
-            
+
         {errorMsg && (
           <div className="text-red-500 text-center whitespace-pre-wrap">
             {errorMsg}
           </div>
         )}
 
-        {/* Accordion Output */}
         {qaList.length > 0 && (
           <Accordion type="single" collapsible className="w-full px-6 py-3 bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800">
             {qaList.map((item, index) => (
