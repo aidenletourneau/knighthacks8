@@ -44,7 +44,7 @@ export default function Home() {
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Generate ${num} trivia questions about ${topic}.
+        contents: `Generate ${num} trivia questions about ${topic}. 
 Provide each question and its answer in the following format:
 1. Question text?
 Answer: The correct answer.`,
@@ -136,7 +136,7 @@ Answer: The correct answer.`,
 
         {/* Accordion Output */}
         {qaList.length > 0 && (
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible className="w-full px-6 py-3 bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800">
             {qaList.map((item, index) => (
               <AccordionItem key={index} value={`item-${index}`}>
                 <AccordionTrigger>
