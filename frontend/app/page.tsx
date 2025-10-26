@@ -55,6 +55,8 @@ export default function Home() {
   const [remainingMs, setRemainingMs] = useState(PER_QUESTION_MS);
   const tickRef = useRef<number | null>(null);
   const questionsRef = useRef<QA[]>([]);
+  const pendingQuestionsRef = useRef<QA[] | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [finished, setFinished] = useState(false);
 
   useEffect(() => {
@@ -94,6 +96,26 @@ export default function Home() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStarted, currentIndex, finished]);
+
+  // Countdown effect: when countdown is active (>0) decrement every second.
+  useEffect(() => {
+    if (countdown == null) 
+      return;
+
+    if (countdown <= 0) {
+      // start game with pending questions
+      const pq = pendingQuestionsRef.current ?? [];
+      if (pq.length > 0) 
+        startGame(pq);
+      pendingQuestionsRef.current = null;
+      setCountdown(null);
+      return;
+    }
+
+    const id = window.setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
 
   function advanceQuestion() {
     setRemainingMs(PER_QUESTION_MS);
@@ -139,7 +161,7 @@ export default function Home() {
     setErrorMsg("");
     setQaList([]);
 
-    try {
+  try {
       const ai = new GoogleGenAI({ apiKey: "AIzaSyCQ3uwzBmfoMQmleseNgOB9jTvy40zV9kA" });
 
       const response = await ai.models.generateContent({
@@ -161,7 +183,9 @@ export default function Home() {
       if (parsedQAs.length === 0) {
         setErrorMsg("No questions were generated. Try a different topic or reduce the number.");
       } else {
-        startGame(parsedQAs);
+        // set pending questions and start a 3-2-1 countdown before starting the game
+        pendingQuestionsRef.current = parsedQAs;
+        setCountdown(3);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
@@ -219,10 +243,10 @@ export default function Home() {
 
       {/* Content */}
       <div className="relative z-10 max-w-2xl w-full space-y-6">
-        <h1 className="text-3xl font-bold text-center text-white">Trivia Question Generator</h1>
-
-        {!gameStarted && !finished && (
+        {!gameStarted && !finished && countdown == null && (
           <>
+            <h1 className="text-3xl font-bold text-center text-white">Trivia Question Generator</h1>
+
             <Input
               className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800"
               placeholder="Enter a topic (e.g., Movies)"
@@ -252,12 +276,21 @@ export default function Home() {
 
             <div className="text-center">
               <Button onClick={generateQuestions} disabled={loading} className="px-6 py-2">
-                {loading ? "Generating..." : "Generate Questions"}
+                {loading ? "Generating..." : "Start Game!"}
               </Button>
             </div>
 
             {errorMsg && <div className="text-red-500 text-center whitespace-pre-wrap">{errorMsg}</div>}
           </>
+        )}
+
+        {/* Countdown overlay before game starts */}
+        {countdown != null && countdown > 0 && (
+          <div className="fixed inset-0 z-30 flex items-center justify-center pointer-events-none">
+            <div className="flex items-center justify-center w-50 h-50 rounded-full bg-black/60 backdrop-blur-sm ring-2 ring-white/10">
+              <div className="text-white text-8xl font-bold drop-shadow-lg animate-pulse">{countdown}</div>
+            </div>
+          </div>
         )}
 
         {/* Game view: single question at a time */}
