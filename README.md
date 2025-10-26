@@ -6,8 +6,6 @@ Small web game that generates trivia questions using Gemini and grades your perf
 
 ## Setup
 
----
-
 ### Frontend
 
 ### 1. Create Node Modules Folder
@@ -15,8 +13,6 @@ Small web game that generates trivia questions using Gemini and grades your perf
 ```bash
 npm install
 ```
-
----
 
 ### Backend
 
