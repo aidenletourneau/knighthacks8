@@ -220,6 +220,29 @@ export default function Home() {
 
   const results = finished ? computeResults() : null;
 
+  const totalPoints = results ? results.reduce((s, r) => s + r.points, 0) : 0;
+  const maxPoints = results ? results.length * 100 : 0;
+  const totalPct = maxPoints ? Math.round((totalPoints / maxPoints) * 100) : 0;
+  // Letter grade mapping: <=59 F, 60-69 D, 70-79 C, 80-89 B, 90-99 A, 100 S Tier
+  const grade = (() => {
+    if (!maxPoints) return "-";
+    if (totalPct === 100) return "S Tier";
+    if (totalPct >= 90) return "A";
+    if (totalPct >= 80) return "B";
+    if (totalPct >= 70) return "C";
+    if (totalPct >= 60) return "D";
+    return "F";
+  })();
+
+  // Color mapping for the grade box and text:
+  // F -> red, D/C -> yellow, B/A/S Tier -> green
+  const gradeColor = (() => {
+    if (!maxPoints) return { text: "text-zinc-400", border: "border-zinc-600" };
+    if (grade === "S Tier" || grade === "A" || grade === "B") return { text: "text-emerald-400", border: "border-emerald-400" };
+    if (grade === "C" || grade === "D") return { text: "text-yellow-400", border: "border-yellow-400" };
+    return { text: "text-red-500", border: "border-red-500" };
+  })();
+
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 p-8 font-sans">
       {/* Background */}
@@ -335,17 +358,35 @@ export default function Home() {
           <div className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800 p-6 space-y-4 text-white">
             <h2 className="text-2xl">Results</h2>
             <div className="space-y-4">
-              {results.map((r, i) => (
-                <div key={i} className="p-3 bg-zinc-800 rounded">
-                  <div className="font-semibold">Q{i + 1}: {r.question}</div>
-                  <div className="text-sm">Your answer: <span className="font-medium">{r.userAns || <em className="text-zinc-400">(no answer)</em>}</span></div>
-                  <div className="text-sm">Correct: <span className="font-medium">{r.correct}</span></div>
-                  <div className="text-sm">Similarity: {(r.similarity * 100).toFixed(0)}% — Points: {r.points}</div>
-                </div>
-              ))}
+              {results.map((r, i) => {
+                const pct = Math.round((r.similarity ?? 0) * 100);
+                let colorClass = "text-red-500";
+                if (pct > 66) colorClass = "text-emerald-400";
+                else if (pct > 33) colorClass = "text-yellow-400";
+
+                return (
+                  <div key={i} className="p-3 bg-zinc-800 rounded">
+                    <div className="font-semibold">Q{i + 1}: {r.question}</div>
+                    <div className="text-sm">Your answer: <span className="font-medium">{r.userAns || <em className="text-zinc-400">(no answer)</em>}</span></div>
+                    <div className="text-sm">Correct: <span className="font-medium">{r.correct}</span></div>
+                    <div className={`text-sm ${colorClass}`}>Similarity: {pct}% — Points: {r.points}</div>
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="pt-4">
+            <div className="pt-4 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-white">
+                  Score: <span className="font-semibold">{totalPoints}</span> / <span className="font-semibold">{maxPoints}</span> — <span className="font-medium">{totalPct}%</span>
+                </div>
+                <div
+                  className={`ml-2 ${gradeColor.text} ${gradeColor.border} border-2 rounded-md px-3 py-1 text-2xl font-bold`}
+                  aria-live="polite"
+                >
+                  {grade}
+                </div>
+              </div>
               <Button onClick={restart}>Restart</Button>
             </div>
           </div>
