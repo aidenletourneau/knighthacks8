@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GoogleGenAI } from "@google/genai";
 import { Button } from "../components/ui/button";
+import Link from "next/link";
 import { Input } from "../components/ui/input";
 import PixelBlast from "../components/PixelBlast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioItem, DropdownMenuRadioGroup, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -157,12 +158,17 @@ export default function Home() {
       return;
     }
 
-    setLoading(true);
+    setLoading(true); 
     setErrorMsg("");
     setQaList([]);
 
   try {
-      
+      const ai = new GoogleGenAI({ apiKey: "AIzaSyCQ3uwzBmfoMQmleseNgOB9jTvy40zV9kA" });
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Generate ${num} trivia questions about ${topic} with ${difficulty} difficulty.\nProvide each question and its answer in the following format:\n1. Question text?\nAnswer: The correct answer.`,
+      });
 
       const text = response.text ?? "";
 
@@ -263,7 +269,14 @@ export default function Home() {
       <div className="relative z-10 max-w-2xl w-full space-y-6">
         {!gameStarted && !finished && countdown == null && (
           <>
-            <h1 className="text-3xl font-bold text-center text-white">Trivia Question Generator</h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-3xl font-bold text-white">Trivia Question Generator</h1>
+              <div>
+                <Link href="/login">
+                  <Button>Login</Button>
+                </Link>
+              </div>
+            </div>
 
             <Input
               className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800"
@@ -281,9 +294,9 @@ export default function Home() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">{`Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`}</Button>
+                <Button className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800 text-white hover:bg-zinc-900/80 hover:ring-2 hover:ring-zinc-700 hover:ring-offset-2 hover:ring-offset-zinc-950 transition-all">{`Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`}</Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800">
+              <DropdownMenuContent className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800">
                 <DropdownMenuRadioGroup value={difficulty} onValueChange={setDifficulty}>
                   <DropdownMenuRadioItem value="easy">Easy</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="medium">Medium</DropdownMenuRadioItem>
