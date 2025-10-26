@@ -1,4 +1,4 @@
-# AI Trivia
+# TriviaAI
 
 Created for Knighthacks VIII
 
