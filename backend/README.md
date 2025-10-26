@@ -1,3 +1,3 @@
 Must set up
 - docker
-- pgadmin
+- dbeaver
