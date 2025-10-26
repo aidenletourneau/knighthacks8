@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from fastapi import APIRouter
-from .routers import gemini, auth
+from .routers import auth, trivia
 from fastapi.responses import RedirectResponse, HTMLResponse
 from urllib.parse import urlencode
 from fastapi import Request, Response
@@ -47,4 +47,4 @@ app.add_middleware(SessionMiddleware, secret_key="some-random-string")
 
 
 app.include_router(auth.router, dependencies=[Depends(get_session)])
-app.include_router(gemini.router, dependencies=[Depends(get_session)])
+app.include_router(trivia.router, dependencies=[Depends(get_session)])

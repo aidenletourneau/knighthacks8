@@ -162,12 +162,7 @@ export default function Home() {
     setQaList([]);
 
   try {
-      const ai = new GoogleGenAI({ apiKey: "AIzaSyCQ3uwzBmfoMQmleseNgOB9jTvy40zV9kA" });
-
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Generate ${num} trivia questions about ${topic} with ${difficulty} difficulty.\nProvide each question and its answer in the following format:\n1. Question text?\nAnswer: The correct answer.`,
-      });
+      
 
       const text = response.text ?? "";
 

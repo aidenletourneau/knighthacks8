@@ -3,7 +3,6 @@ from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
 import uuid
-from pydantic import UUID4
 
 
 class Hero(SQLModel, table=True):
@@ -12,9 +11,12 @@ class Hero(SQLModel, table=True):
     age: int | None = Field(default=None, index=True)
     secret_name: str
 
-class GeminiPacket(SQLModel):
-    prompt: str
-    user: str = Field(default=None, foreign_key="User.username")
+class PastQuestions(SQLModel):
+    question: str
+    userAnswer: str
+    correctAnswer: str
+    score: str
+    username: str = Field(default=None, foreign_key="User.username")
 
 class User(SQLModel, table=True):
     __tablename__ = "User"
