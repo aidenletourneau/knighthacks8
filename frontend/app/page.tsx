@@ -1,40 +1,134 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleGenAI } from "@google/genai";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import PixelBlast from '../components/PixelBlast';
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import PixelBlast from "../components/PixelBlast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioItem, DropdownMenuRadioGroup, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type QA = {
   question: string;
   answer: string;
 };
 
+const PER_QUESTION_MS = 15000;
+
+function levenshtein(a: string, b: string) {
+  const al = a.length;
+  const bl = b.length;
+
+  if (al === 0) 
+    return bl;
+  if (bl === 0) 
+    return al;
+
+  const dp = Array.from({ length: al + 1 }, () => new Array(bl + 1).fill(0));
+
+  for (let i = 0; i <= al; i++) 
+    dp[i][0] = i;
+
+  for (let j = 0; j <= bl; j++) 
+    dp[0][j] = j;
+
+  for (let i = 1; i <= al; i++) {
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[al][bl];
+}
+
 export default function Home() {
   const [topicInput, setTopicInput] = useState("");
-  const [numInput, setNumInput] = useState("");
+  const [numInput, setNumInput] = useState("5");
   const [qaList, setQaList] = useState<QA[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [difficulty, setDifficulty] = useState("medium"); // 👈 new state
+  const [difficulty, setDifficulty] = useState("medium");
+
+  // Game state
+  const [gameStarted, setGameStarted] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [remainingMs, setRemainingMs] = useState(PER_QUESTION_MS);
+  const tickRef = useRef<number | null>(null);
+  const questionsRef = useRef<QA[]>([]);
+  const [finished, setFinished] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+    };
+  }, []);
+
+  const startGame = (questions: QA[]) => {
+    questionsRef.current = questions;
+    setQaList(questions);
+    setAnswers(Array(questions.length).fill(""));
+    setCurrentIndex(0);
+    setRemainingMs(PER_QUESTION_MS);
+    setFinished(false);
+    setGameStarted(true);
+  };
+
+  useEffect(() => {
+    if (!gameStarted || finished) return;
+    // start tick
+    if (tickRef.current) window.clearInterval(tickRef.current);
+    tickRef.current = window.setInterval(() => {
+      setRemainingMs((ms) => {
+        if (ms <= 100) {
+          // advance
+          advanceQuestion();
+          return PER_QUESTION_MS;
+        }
+        return ms - 100;
+      });
+    }, 100);
+
+    return () => {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+      tickRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameStarted, currentIndex, finished]);
+
+  function advanceQuestion() {
+    setRemainingMs(PER_QUESTION_MS);
+    setCurrentIndex((idx) => {
+      const next = idx + 1;
+      if (next >= questionsRef.current.length) {
+        // finish
+        setFinished(true);
+        setGameStarted(false);
+        if (tickRef.current) {
+          window.clearInterval(tickRef.current);
+          tickRef.current = null;
+        }
+        return idx; // keep at last index for summary
+      }
+      return next;
+    });
+  }
+
+  function manualAdvance() {
+    // user pressed Enter or clicked next
+    advanceQuestion();
+  }
+
+  function updateAnswer(val: string) {
+    setAnswers((prev) => {
+      const copy = [...prev];
+      copy[currentIndex] = val;
+      return copy;
+    });
+  }
 
   async function generateQuestions() {
     const topic = topicInput.trim();
-    const num = parseInt(numInput);
+    const num = parseInt(numInput) || 5;
 
     if (!topic || isNaN(num) || num <= 0) {
       setErrorMsg("⚠️ Please enter a valid topic and number of questions.");
@@ -46,16 +140,11 @@ export default function Home() {
     setQaList([]);
 
     try {
-      const ai = new GoogleGenAI({
-        apiKey: "AIzaSyCQ3uwzBmfoMQmleseNgOB9jTvy40zV9kA",
-      });
+      const ai = new GoogleGenAI({ apiKey: "AIzaSyCQ3uwzBmfoMQmleseNgOB9jTvy40zV9kA" });
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Generate ${num} trivia questions about ${topic} with ${difficulty} difficulty.
-Provide each question and its answer in the following format:
-1. Question text?
-Answer: The correct answer.`,
+        contents: `Generate ${num} trivia questions about ${topic} with ${difficulty} difficulty.\nProvide each question and its answer in the following format:\n1. Question text?\nAnswer: The correct answer.`,
       });
 
       const text = response.text ?? "";
@@ -69,15 +158,43 @@ Answer: The correct answer.`,
       });
 
       const parsedQAs = qaMatches.filter((item): item is QA => item !== null);
-      setQaList(parsedQAs);
+      if (parsedQAs.length === 0) {
+        setErrorMsg("No questions were generated. Try a different topic or reduce the number.");
+      } else {
+        startGame(parsedQAs);
+      }
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error occurred";
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       setErrorMsg("Error generating questions: " + errorMessage);
     } finally {
       setLoading(false);
     }
   }
+
+  function computeResults() {
+    const results = qaList.map((q, i) => {
+      const userAns = (answers[i] || "").trim();
+      const correct = q.answer.trim().replace(/\.$/, ''); // remove trailing period for fairness
+      const maxLen = Math.max(userAns.length, correct.length, 1);
+      const dist = levenshtein(userAns.toLowerCase(), correct.toLowerCase());
+      const similarity = Math.max(0, 1 - dist / maxLen);
+      const points = Math.round(similarity * 100);
+      return { question: q.question, correct, userAns, similarity, points };
+    });
+    return results;
+  }
+
+  function restart() {
+    setGameStarted(false);
+    setFinished(false);
+    setQaList([]);
+    setAnswers([]);
+    setCurrentIndex(0);
+    setRemainingMs(PER_QUESTION_MS);
+    setErrorMsg("");
+  }
+
+  const results = finished ? computeResults() : null;
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 p-8 font-sans">
@@ -90,90 +207,115 @@ Answer: The correct answer.`,
           patternScale={3}
           patternDensity={1.2}
           pixelSizeJitter={0.5}
-          enableRipples
-          rippleSpeed={0.4}
-          rippleThickness={0.12}
-          rippleIntensityScale={1.5}
+          enableRipples={false}
           liquid={false}
-          liquidStrength={0.12}
-          liquidRadius={1.2}
-          liquidWobbleSpeed={5}
           speed={0.6}
           edgeFade={0.25}
           transparent
+          className="absolute inset-0 w-full h-full"
+          style={{ width: '100%', height: '100%' }}
         />
       </div>
 
       {/* Content */}
       <div className="relative z-10 max-w-2xl w-full space-y-6">
-        <h1 className="text-3xl font-bold text-center text-white">
-          Trivia Question Generator
-        </h1>
+        <h1 className="text-3xl font-bold text-center text-white">Trivia Question Generator</h1>
 
-        <Input
-          className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800"
-          placeholder="Enter a topic (e.g., Movies)"
-          value={topicInput}
-          onChange={(e) => setTopicInput(e.target.value)}
-        />
-        <Input
-          className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800"
-          placeholder="Enter number of questions"
-          type="number"
-          value={numInput}
-          onChange={(e) => setNumInput(e.target.value)}
-        />
+        {!gameStarted && !finished && (
+          <>
+            <Input
+              className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800"
+              placeholder="Enter a topic (e.g., Movies)"
+              value={topicInput}
+              onChange={(e) => setTopicInput(e.target.value)}
+            />
+            <Input
+              className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800"
+              placeholder="Enter number of questions"
+              type="number"
+              value={numInput}
+              onChange={(e) => setNumInput(e.target.value)}
+            />
 
-        {/* Difficulty Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              {`Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56">
-            <DropdownMenuRadioGroup
-              value={difficulty}
-              onValueChange={setDifficulty} // 👈 updates difficulty
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">{`Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`}</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800">
+                <DropdownMenuRadioGroup value={difficulty} onValueChange={setDifficulty}>
+                  <DropdownMenuRadioItem value="easy">Easy</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="medium">Medium</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="hard">Hard</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="text-center">
+              <Button onClick={generateQuestions} disabled={loading} className="px-6 py-2">
+                {loading ? "Generating..." : "Generate Questions"}
+              </Button>
+            </div>
+
+            {errorMsg && <div className="text-red-500 text-center whitespace-pre-wrap">{errorMsg}</div>}
+          </>
+        )}
+
+        {/* Game view: single question at a time */}
+        {gameStarted && !finished && qaList.length > 0 && (
+          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800 p-6">
+            <div className="mb-4 text-white">Question {currentIndex + 1} of {qaList.length}</div>
+            <div className="mb-4 text-lg text-white">{qaList[currentIndex].question}</div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                manualAdvance();
+              }}
             >
-              <DropdownMenuRadioItem value="easy">Easy</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="medium">Medium</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="hard">Hard</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <div className="text-center">
-          <Button
-            onClick={generateQuestions}
-            disabled={loading}
-            className="px-6 py-2"
-          >
-            {loading ? "Generating..." : "Generate Questions"}
-          </Button>
-        </div>
-
-        {errorMsg && (
-          <div className="text-red-500 text-center whitespace-pre-wrap">
-            {errorMsg}
+              <Input
+                className="bg-white/5 text-white"
+                placeholder="Type your answer here"
+                value={answers[currentIndex] ?? ""}
+                onChange={(e) => updateAnswer(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    manualAdvance();
+                  }
+                }}
+              />
+              <div className="mt-4 flex items-center gap-2">
+                <div className="flex-1 h-3 bg-zinc-800 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 transition-[width]"
+                    style={{ width: `${(remainingMs / PER_QUESTION_MS) * 100}%` }}
+                  />
+                </div>
+                <div className="text-sm text-white w-12 text-right">{Math.ceil(remainingMs / 1000)}s</div>
+              </div>
+            </form>
           </div>
         )}
 
-        {qaList.length > 0 && (
-          <Accordion type="single" collapsible className="w-full px-6 py-3 bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800">
-            {qaList.map((item, index) => (
-              <AccordionItem key={index} value={`item-${index}`}>
-                <AccordionTrigger>
-                  {index + 1}. {item.question}
-                </AccordionTrigger>
-                <AccordionContent>
-                  <p className="text-zinc-700 dark:text-zinc-300">
-                    <strong>Answer:</strong> {item.answer}
-                  </p>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+        {/* Results view */}
+        {finished && results && (
+          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-lg shadow-lg border border-zinc-800 p-6 space-y-4 text-white">
+            <h2 className="text-2xl">Results</h2>
+            <div className="space-y-4">
+              {results.map((r, i) => (
+                <div key={i} className="p-3 bg-zinc-800 rounded">
+                  <div className="font-semibold">Q{i + 1}: {r.question}</div>
+                  <div className="text-sm">Your answer: <span className="font-medium">{r.userAns || <em className="text-zinc-400">(no answer)</em>}</span></div>
+                  <div className="text-sm">Correct: <span className="font-medium">{r.correct}</span></div>
+                  <div className="text-sm">Similarity: {(r.similarity * 100).toFixed(0)}% — Points: {r.points}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4">
+              <Button onClick={restart}>Restart</Button>
+            </div>
+          </div>
         )}
       </div>
     </div>
