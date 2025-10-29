@@ -185,7 +185,7 @@ export default function Home() {
     setQaList([]);
 
   try {
-      // access Gemini API key AIzaSyBjmq29TGirfaSyDWxgerPgkMrKPT41hXE
+      // access Gemini API key from environment variable
       const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GENAI_API_KEY as string });
 
       const response = await ai.models.generateContent({
