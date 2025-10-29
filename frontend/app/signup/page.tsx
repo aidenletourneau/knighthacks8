@@ -5,17 +5,35 @@ import Link from "next/link";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import Card, { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../../components/ui/card";
+import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const router = useRouter();
+
+  const register = async (email: string, username: string, password: string) => {
+    const response = await fetch('http://localhost:8000/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, username, password })
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err?.detail || 'Registration failed');
+    }
+    return await response.json();
+  };
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: hook up signup
-    console.log("signup", { name, email, password });
-    alert("Sign up submitted (not implemented)");
+    register(email, name, password)
+      .then(() => {
+        alert("Registration successful! Please log in.");
+        router.push("/login");
+      })
+      .catch((err) => alert(err.message || 'Registration failed'));
   }
 
   return (

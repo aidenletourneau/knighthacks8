@@ -15,6 +15,20 @@ type QA = {
 
 const PER_QUESTION_MS = 15000;
 
+const getCurrentUser = async () => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  if (!token) return null;
+  try {
+    const response = await fetch('http://localhost:8000/api/auth/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
 function levenshtein(a: string, b: string) {
   const al = a.length;
   const bl = b.length;
@@ -59,11 +73,19 @@ export default function Home() {
   const pendingQuestionsRef = useRef<QA[] | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [finished, setFinished] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ id: number; email: string; username: string } | null>(null);
 
   useEffect(() => {
     return () => {
       if (tickRef.current) window.clearInterval(tickRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const me = await getCurrentUser();
+      setCurrentUser(me);
+    })();
   }, []);
 
   const startGame = (questions: QA[]) => {
@@ -163,7 +185,8 @@ export default function Home() {
     setQaList([]);
 
   try {
-      const ai = new GoogleGenAI({ apiKey: "AIzaSyCQ3uwzBmfoMQmleseNgOB9jTvy40zV9kA" });
+      // access Gemini API key AIzaSyBjmq29TGirfaSyDWxgerPgkMrKPT41hXE
+      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GENAI_API_KEY as string });
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -272,9 +295,15 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <h1 className="text-3xl font-bold text-white">Trivia Question Generator</h1>
               <div>
-                <Link href="/login">
-                  <Button>Login</Button>
-                </Link>
+                {currentUser ? (
+                  <Link href="/profile">
+                    <Button>Profile</Button>
+                  </Link>
+                ) : (
+                  <Link href="/login">
+                    <Button>Login</Button>
+                  </Link>
+                )}
               </div>
             </div>
 

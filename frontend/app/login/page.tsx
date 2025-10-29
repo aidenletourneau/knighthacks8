@@ -5,16 +5,35 @@ import Link from "next/link";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import Card, { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../../components/ui/card";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const router = useRouter();
+
+  const login = async (email: string, password: string) => {
+    const response = await fetch('http://localhost:8000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err?.detail || 'Login failed');
+    }
+    const data = await response.json();
+    localStorage.setItem('token', data.access_token);
+    return data;
+  };
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: hook up auth
-    console.log("login", { email, password });
-    alert("Login submitted (not implemented)");
+    login(email, password)
+      .then(() => {
+        router.push("/");
+      })
+      .catch((err) => alert(err.message || 'Login failed'));
   }
 
   return (

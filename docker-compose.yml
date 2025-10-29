@@ -1,10 +1,40 @@
+version: '3.9'
+
 services:
-  kh8_db:
-    image: postgres
-    restart: always
-    ports:
-      - 5432:5432
+  db:
+    image: postgres:16-alpine
+    container_name: kh8-postgres
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: mysecretpassword
-      POSTGRES_DB: local
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppass
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kh8-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://appuser:apppass@db:5432/appdb
+      JWT_SECRET: supersecret_dev_key_change_me
+      FRONTEND_ORIGIN: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  db_data:
+
+
